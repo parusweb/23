@@ -1,10 +1,8 @@
 <?php
 /**
- * Модуль: Category Helpers
- * Описание: Функции для работы с категориями товаров
+ * Модуль: Функции категорий (КРИТИЧЕСКИЙ)
+ * Описание: Проверка категорий и определение типов калькуляторов
  * Зависимости: нет
- * 
- * ВАЖНО: Логика точно соответствует оригинальному functions_full_old.php
  */
 
 if (!defined('ABSPATH')) {
@@ -12,25 +10,24 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * КРИТИЧЕСКАЯ ФУНКЦИЯ: Проверка целевых категорий для калькуляторов
+ * Проверка принадлежности товара к целевым категориям
+ * (Категории где используются калькуляторы)
  */
 function is_in_target_categories($product_id) {
-    return is_in_painting_categories($product_id);
-}
-
-/**
- * Проверка категорий для услуг покраски
- * Категории: 87-93 (пиломатериалы), 190,191,127,94 (листовые), 265-271 (столярные)
- */
-function is_in_painting_categories($product_id) {
-    $product_categories = wp_get_post_terms($product_id, 'product_cat', array('fields' => 'ids'));
+    $product_categories = wp_get_post_terms($product_id, 'product_cat', ['fields' => 'ids']);
+    
     if (is_wp_error($product_categories) || empty($product_categories)) {
         return false;
     }
     
+    // Целевые категории:
+    // 87-93: Пиломатериалы
+    // 190-191, 127, 94: Листовые материалы  
+    // 265-271: Столярные изделия
+    // 266: Фальшбалки
     $target_categories = array_merge(
         range(87, 93),
-        array(190, 191, 127, 94),
+        [190, 191, 127, 94],
         range(265, 271)
     );
     
@@ -38,8 +35,10 @@ function is_in_painting_categories($product_id) {
         if (in_array($cat_id, $target_categories)) {
             return true;
         }
+        
+        // Проверяем родительские категории
         foreach ($target_categories as $target_cat_id) {
-            if (function_exists('cat_is_ancestor_of') && cat_is_ancestor_of($target_cat_id, $cat_id)) {
+            if (cat_is_ancestor_of($target_cat_id, $cat_id)) {
                 return true;
             }
         }
@@ -49,51 +48,24 @@ function is_in_painting_categories($product_id) {
 }
 
 /**
- * ТОЧНАЯ КОПИЯ из functions.php (строка ~456)
- * Проверка категорий с множителем цены
- * Категории: 265, 266, 267, 268, 270, 271
- */
-function is_in_multiplier_categories($product_id) {
-    $product_categories = wp_get_post_terms($product_id, 'product_cat', array('fields' => 'ids'));
-    if (is_wp_error($product_categories) || empty($product_categories)) {
-        return false;
-    }
-    
-    $target_categories = array(265, 266, 267, 268, 270, 271);
-    
-    foreach ($product_categories as $cat_id) {
-        if (in_array($cat_id, $target_categories)) {
-            return true;
-        }
-        foreach ($target_categories as $target_cat_id) {
-            if (function_exists('cat_is_ancestor_of') && cat_is_ancestor_of($target_cat_id, $cat_id)) {
-                return true;
-            }
-        }
-    }
-    
-    return false;
-}
-
-/**
- * ТОЧНАЯ КОПИЯ из functions.php (строка ~401)
- * Проверка категорий квадратных метров
- * Категории: 270, 267, 268
+ * Проверка категорий с расчетом за кв.м (столярные изделия)
  */
 function is_square_meter_category($product_id) {
-    $product_categories = wp_get_post_terms($product_id, 'product_cat', array('fields' => 'ids'));
+    $product_categories = wp_get_post_terms($product_id, 'product_cat', ['fields' => 'ids']);
+    
     if (is_wp_error($product_categories) || empty($product_categories)) {
         return false;
     }
     
-    $target_categories = array(270, 267, 268);
+    $target_categories = [266, 268, 270];
     
     foreach ($product_categories as $cat_id) {
         if (in_array($cat_id, $target_categories)) {
             return true;
         }
+        
         foreach ($target_categories as $target_cat_id) {
-            if (function_exists('cat_is_ancestor_of') && cat_is_ancestor_of($target_cat_id, $cat_id)) {
+            if (cat_is_ancestor_of($target_cat_id, $cat_id)) {
                 return true;
             }
         }
@@ -103,24 +75,24 @@ function is_square_meter_category($product_id) {
 }
 
 /**
- * ТОЧНАЯ КОПИЯ из functions.php (строка ~424)
- * Проверка категорий погонных метров
- * Категории: 267, 271
+ * Проверка категорий с расчетом за пог.м (столярные изделия)
  */
 function is_running_meter_category($product_id) {
-    $product_categories = wp_get_post_terms($product_id, 'product_cat', array('fields' => 'ids'));
+    $product_categories = wp_get_post_terms($product_id, 'product_cat', ['fields' => 'ids']);
+    
     if (is_wp_error($product_categories) || empty($product_categories)) {
         return false;
     }
     
-    $target_categories = array(267, 271);
+    $target_categories = [267, 271];
     
     foreach ($product_categories as $cat_id) {
         if (in_array($cat_id, $target_categories)) {
             return true;
         }
+        
         foreach ($target_categories as $target_cat_id) {
-            if (function_exists('cat_is_ancestor_of') && cat_is_ancestor_of($target_cat_id, $cat_id)) {
+            if (cat_is_ancestor_of($target_cat_id, $cat_id)) {
                 return true;
             }
         }
@@ -130,7 +102,62 @@ function is_running_meter_category($product_id) {
 }
 
 /**
- * Проверка принадлежности к категории с учетом иерархии
+ * Проверка категорий для покраски
+ */
+function is_in_painting_categories($product_id) {
+    $product_categories = wp_get_post_terms($product_id, 'product_cat', ['fields' => 'ids']);
+    
+    if (is_wp_error($product_categories) || empty($product_categories)) {
+        return false;
+    }
+    
+    // Категории с покраской:
+    // 87-93: Пиломатериалы
+    // 190-191, 127, 94: Листовые
+    // 265-271: Столярные изделия
+    $target_categories = array_merge(
+        range(87, 93),
+        [190, 191, 127, 94],
+        range(265, 271)
+    );
+    
+    foreach ($product_categories as $cat_id) {
+        if (in_array($cat_id, $target_categories)) {
+            return true;
+        }
+        
+        foreach ($target_categories as $target_cat_id) {
+            if (cat_is_ancestor_of($target_cat_id, $cat_id)) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * Проверка принадлежности к категории листовых материалов
+ */
+function is_leaf_category($product_id) {
+    $leaf_parent_id = 190;
+    $leaf_children = [191, 127, 94];
+    $leaf_ids = array_merge([$leaf_parent_id], $leaf_children);
+    
+    return has_term($leaf_ids, 'product_cat', $product_id);
+}
+
+/**
+ * Проверка принадлежности к категориям пиломатериалов
+ */
+function is_lumber_category($product_id) {
+    $lumber_categories = range(87, 93);
+    
+    return has_term($lumber_categories, 'product_cat', $product_id);
+}
+
+/**
+ * Проверка принадлежности товара к конкретной категории
  */
 function product_in_category($product_id, $category_id) {
     $terms = wp_get_post_terms($product_id, 'product_cat', array('fields' => 'ids'));
@@ -154,16 +181,19 @@ function product_in_category($product_id, $category_id) {
 
 /**
  * Определение типа калькулятора для товара
+ * 
+ * @return string Тип калькулятора: 
+ *   'area' - калькулятор площади
+ *   'dimensions' - калькулятор размеров
+ *   'falsebalk' - калькулятор фальшбалок
+ *   'running_meter' - калькулятор погонных метров
+ *   'square_meter' - калькулятор квадратных метров
+ *   'none' - калькулятор не нужен
  */
 function get_calculator_type($product_id) {
     $title = get_the_title($product_id);
-    if (function_exists('extract_area_with_qty')) {
-        $area = extract_area_with_qty($title, $product_id);
-        if ($area && $area > 0) {
-            return 'dimensions';
-        }
-    }
     
+    // 1. Проверяем фальшбалки (категория 266)
     if (product_in_category($product_id, 266)) {
         $shapes_data = get_post_meta($product_id, '_falsebalk_shapes_data', true);
         if (is_array($shapes_data) && !empty($shapes_data)) {
@@ -175,14 +205,26 @@ function get_calculator_type($product_id) {
         }
     }
     
-    if (is_running_meter_category($product_id)) {
-        return 'running_meter';
+    // 2. Проверяем наличие площади в названии (для пиломатериалов и листовых)
+    if (function_exists('extract_area_with_qty')) {
+        $area = extract_area_with_qty($title, $product_id);
+        if ($area && $area > 0) {
+            // Если есть площадь в названии - используем калькулятор площади
+            return 'area';
+        }
     }
     
+    // 3. Проверяем категории квадратных метров
     if (is_square_meter_category($product_id)) {
         return 'square_meter';
     }
     
+    // 4. Проверяем категории погонных метров
+    if (is_running_meter_category($product_id)) {
+        return 'running_meter';
+    }
+    
+    // 5. Проверяем мета-поля продажи
     if (get_post_meta($product_id, '_sold_by_area', true) === 'yes') {
         return 'square_meter';
     }
@@ -191,6 +233,7 @@ function get_calculator_type($product_id) {
         return 'running_meter';
     }
     
+    // 6. Проверяем наличие размеров в названии (столярка)
     if (preg_match('/\d+\s*[х×*]\s*\d+/', $title)) {
         return 'dimensions';
     }
@@ -199,7 +242,7 @@ function get_calculator_type($product_id) {
 }
 
 /**
- * Получение единицы измерения товара
+ * Получение единицы измерения товара на основе категории
  */
 function get_category_based_unit($product_id) {
     if (is_square_meter_category($product_id)) {
@@ -210,8 +253,12 @@ function get_category_based_unit($product_id) {
         return 'м.п.';
     }
     
-    if (has_term(array(190, 191, 127, 94), 'product_cat', $product_id)) {
+    if (is_leaf_category($product_id)) {
         return 'лист';
+    }
+    
+    if (is_lumber_category($product_id)) {
+        return 'упаковка';
     }
     
     $custom_unit = get_post_meta($product_id, '_custom_unit', true);
@@ -224,6 +271,7 @@ function get_category_based_unit($product_id) {
 
 /**
  * Получение форм склонения единицы измерения
+ * Возвращает массив [единственное, два-четыре, пять и более]
  */
 function get_unit_declension_forms($product_id) {
     $unit = get_category_based_unit($product_id);
@@ -234,88 +282,20 @@ function get_unit_declension_forms($product_id) {
         'лист' => array('лист', 'листа', 'листов'),
         'упаковка' => array('упаковка', 'упаковки', 'упаковок'),
         'шт' => array('штука', 'штуки', 'штук'),
+        'л' => array('литр', 'литра', 'литров'),
     );
     
-    return isset($forms[$unit]) ? $forms[$unit] : array('шт', 'шт', 'шт');
+    return isset($forms[$unit]) ? $forms[$unit] : array($unit, $unit, $unit);
 }
 
 /**
- * Правильное склонение для количества
+ * Склонение числительных (русский язык)
+ * 
+ * @param int $number Число
+ * @param array $forms Массив форм [1, 2, 5]
+ * @return string Правильная форма слова
  */
-function get_quantity_with_unit($quantity, $product_id) {
-    $forms = get_unit_declension_forms($product_id);
-    
+function get_russian_plural($number, $forms) {
     $cases = array(2, 0, 1, 1, 1, 2);
-    $form_index = ($quantity % 100 > 4 && $quantity % 100 < 20) 
-        ? 2 
-        : $cases[min($quantity % 10, 5)];
-    
-    return $quantity . ' ' . $forms[$form_index];
-}
-
-/**
- * Получение всех родительских категорий товара
- */
-function get_product_ancestor_categories($product_id) {
-    $categories = wp_get_post_terms($product_id, 'product_cat', array('fields' => 'ids'));
-    $all_categories = array();
-    
-    if (is_wp_error($categories) || empty($categories)) {
-        return $all_categories;
-    }
-    
-    foreach ($categories as $cat_id) {
-        $all_categories[] = $cat_id;
-        $ancestors = get_ancestors($cat_id, 'product_cat');
-        $all_categories = array_merge($all_categories, $ancestors);
-    }
-    
-    return array_unique($all_categories);
-}
-
-/**
- * Проверка нужен ли калькулятор для товара
- */
-function needs_calculator($product_id) {
-    return is_in_painting_categories($product_id) || 
-           is_in_multiplier_categories($product_id) ||
-           get_calculator_type($product_id) !== 'none';
-}
-
-/**
- * Получение настроек калькулятора для категории
- */
-function get_category_calculator_settings($product_id) {
-    $calc_type = get_calculator_type($product_id);
-    
-    $settings = array(
-        'type' => $calc_type,
-        'show_painting' => is_in_painting_categories($product_id),
-        'has_multiplier' => is_in_multiplier_categories($product_id),
-        'unit' => get_category_based_unit($product_id),
-        'is_falsebalk' => $calc_type === 'falsebalk',
-    );
-    
-    return $settings;
-}
-
-/**
- * Получение доступных типов фасок для товара
- */
-function get_available_faska_types($product_id) {
-    $product_categories = wp_get_post_terms($product_id, 'product_cat', array('fields' => 'ids'));
-    
-    if (is_wp_error($product_categories) || empty($product_categories)) {
-        return array();
-    }
-    
-    foreach ($product_categories as $cat_id) {
-        $faska_types = get_term_meta($cat_id, 'faska_types', true);
-        
-        if (!empty($faska_types) && is_array($faska_types)) {
-            return $faska_types;
-        }
-    }
-    
-    return array();
+    return $forms[($number % 100 > 4 && $number % 100 < 20) ? 2 : $cases[min($number % 10, 5)]];
 }
