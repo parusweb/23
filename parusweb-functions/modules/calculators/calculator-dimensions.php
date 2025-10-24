@@ -4,6 +4,9 @@
  * Описание: Калькулятор размеров для столярных изделий с множителем
  * Категории: 265-271 (столярные изделия)
  * Зависимости: category-helpers, product-calculations
+ * 
+ * ВАЖНО: Этот файл содержит ТОЛЬКО функцию отображения
+ * Подключение через add_action происходит в calculator-display.php
  */
 
 if (!defined('ABSPATH')) {
@@ -11,25 +14,11 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Вывод калькулятора размеров на странице товара
+ * Функция вывода калькулятора размеров
+ * Вызывается из calculator-display.php
  */
-add_action('woocommerce_before_add_to_cart_button', 'display_dimensions_calculator', 5);
-function display_dimensions_calculator() {
-    global $product;
-    
-    if (!$product) {
-        return;
-    }
-    
-    $product_id = $product->get_id();
-    
-    // Проверяем нужен ли калькулятор размеров
-    if (!function_exists('get_calculator_type') || get_calculator_type($product_id) !== 'dimensions') {
-        return;
-    }
-    
-    // Получаем данные товара
-    $base_price = $product->get_price();
+function display_dimensions_calculator($product_id, $price, $area_data = null) {
+    $base_price = $price;
     $multiplier = function_exists('get_final_multiplier') ? get_final_multiplier($product_id) : 1.0;
     
     // Получаем диапазоны размеров
@@ -48,11 +37,11 @@ function display_dimensions_calculator() {
     $length_step = $ranges['length']['step'];
     
     ?>
-    <div id="dimensions-calculator" class="parusweb-calculator" style="margin: 20px 0; padding: 20px; border: 2px solid #2196F3; border-radius: 8px; background: #f9f9f9;">
-        <h4 style="margin-top: 0; color: #1565c0;">Калькулятор размеров</h4>
+    <div id="dimensions-calculator" class="parusweb-calculator" style="margin: 20px 0; padding: 20px; border: 2px solid #ddd; border-radius: 8px; background: #f9f9f9;">
+        <h4 style="margin-top: 0;">Калькулятор размеров</h4>
         
         <?php if ($multiplier > 1): ?>
-        <div style="margin-bottom: 15px; padding: 12px; background: #e3f2fd; border-radius: 4px; border-left: 4px solid #2196F3;">
+        <div style="margin-bottom: 15px; padding: 12px; background: #fff3cd; border-radius: 4px;">
             <strong>Множитель:</strong> ×<?php echo number_format($multiplier, 1, ',', ' '); ?>
         </div>
         <?php endif; ?>
@@ -74,23 +63,27 @@ function display_dimensions_calculator() {
             <select id="dim_length" name="custom_length_val" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
                 <option value="">Выберите...</option>
                 <?php
-                $length = $length_min;
-                while ($length <= $length_max) {
-                    echo '<option value="' . $length . '">' . number_format($length, 2, ',', ' ') . ' м</option>';
-                    $length += $length_step;
+                $length_min_m = $length_min / 1000;
+                $length_max_m = $length_max / 1000;
+                $length_step_m = $length_step / 1000;
+                
+                for ($l = $length_min_m; $l <= $length_max_m; $l += $length_step_m) {
+                    echo '<option value="' . ($l * 1000) . '">' . number_format($l, 2, ',', '') . ' м</option>';
                 }
                 ?>
             </select>
         </div>
         
-        <div id="dim_calc_result" style="padding: 15px; background: #fff; border: 2px solid #2196F3; border-radius: 6px; display: none; margin-top: 15px;">
-            <div style="margin-bottom: 10px;">
-                <strong>Размер:</strong> <span id="dim_size_display">-</span>
-            </div>
+        <div id="dim_calc_result" style="padding: 15px; background: #fff; border: 2px solid #ddd; border-radius: 6px; display: none; margin-top: 15px;">
             <div style="margin-bottom: 10px;">
                 <strong>Площадь:</strong> <span id="dim_total_area">0</span> м²
             </div>
-            <div style="font-size: 20px; color: #2196F3; font-weight: 700;">
+            <?php if ($multiplier > 1): ?>
+            <div style="margin-bottom: 10px;">
+                <strong>Цена с множителем:</strong> <span id="dim_price_with_mult">0 ₽</span>
+            </div>
+            <?php endif; ?>
+            <div style="font-size: 18px; color: #2271b1; font-weight: 700;">
                 <strong>Итого:</strong> <span id="dim_total_price">0 ₽</span>
             </div>
         </div>
@@ -104,38 +97,40 @@ function display_dimensions_calculator() {
     
     <script>
     jQuery(document).ready(function($) {
-        'use strict';
+        console.log('✓ Dimensions Calculator initialized');
         
-        // Функция обновления расчетов
         function updateDimensionsCalculator() {
             const width = parseFloat($('#dim_width').val()) || 0;
             const length = parseFloat($('#dim_length').val()) || 0;
-            const basePrice = parseFloat($('#dim_base_price').val()) || 0;
-            const multiplier = parseFloat($('#dim_multiplier').val()) || 1;
             
-            if (width <= 0 || length <= 0 || basePrice <= 0) {
+            if (width <= 0 || length <= 0) {
                 $('#dim_calc_result').hide();
                 return;
             }
             
-            // Расчет площади с множителем
-            const area = (width / 1000) * length * multiplier;
-            let totalPrice = area * basePrice;
+            const area = (width / 1000) * (length / 1000); // конвертируем в м²
+            const basePrice = parseFloat($('#dim_base_price').val()) || 0;
+            const multiplier = parseFloat($('#dim_multiplier').val()) || 1;
             
-            // Добавляем стоимость покраски если выбрана
-            let grandTotal = totalPrice;
-            const paintingSelect = $('#painting_service_select');
-            if (paintingSelect.length && paintingSelect.val()) {
-                const paintingPricePerM2 = parseFloat(paintingSelect.find('option:selected').data('price')) || 0;
-                if (paintingPricePerM2 > 0) {
-                    grandTotal += area * paintingPricePerM2;
+            const pricePerM2 = basePrice * multiplier;
+            const totalPrice = area * pricePerM2;
+            
+            // Получаем стоимость покраски если есть
+            let paintingPrice = 0;
+            if ($('#painting_service_select').length) {
+                const selectedService = $('#painting_service_select option:selected');
+                if (selectedService.val()) {
+                    const paintingPricePerM2 = parseFloat(selectedService.data('price')) || 0;
+                    paintingPrice = area * paintingPricePerM2;
                 }
             }
             
-            // Обновляем отображение
-            $('#dim_size_display').text(width + ' мм × ' + length.toFixed(2) + ' м');
-            $('#dim_total_area').text(area.toFixed(3).replace('.', ','));
-            $('#dim_total_price').text(formatPrice(grandTotal));
+            const grandTotal = totalPrice + paintingPrice;
+            
+            // Обновляем вывод
+            $('#dim_total_area').text(area.toFixed(3) + ' м²');
+            $('#dim_price_with_mult').text(Math.round(totalPrice).toLocaleString('ru-RU') + ' ₽');
+            $('#dim_total_price').text(Math.round(grandTotal).toLocaleString('ru-RU') + ' ₽');
             
             // Обновляем скрытые поля
             $('#dim_price').val(totalPrice);
@@ -145,22 +140,12 @@ function display_dimensions_calculator() {
             $('#dim_calc_result').show();
             
             // Обновляем количество WooCommerce
-            $('input.qty').val(1);
-        }
-        
-        // Форматирование цены
-        function formatPrice(price) {
-            return Math.round(price).toLocaleString('ru-RU') + ' ₽';
+            $('input.qty').val(1).prop('readonly', true).css('background-color', '#f5f5f5');
         }
         
         // Обработчики изменений
         $('#dim_width, #dim_length').on('change', updateDimensionsCalculator);
         $(document).on('change', '#painting_service_select, #painting_color_select', updateDimensionsCalculator);
-        
-        // Блокируем стандартное поле количества
-        $('input.qty').prop('readonly', true).css('background-color', '#f5f5f5');
-        
-        console.log('✓ Dimensions Calculator initialized');
     });
     </script>
     <?php
